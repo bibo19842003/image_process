@@ -23,11 +23,36 @@ class ResizableImageLabel(QLabel):
     def resizeEvent(self, event):
         """窗口大小变化时重新调整图片大小"""
         super().resizeEvent(event)
-        if self.current_image is not None:
-            # 重新显示图片以适应新的标签大小
-            main_window = self.window()
-            if hasattr(main_window, 'display_image'):
-                main_window.display_image(self.current_image, self)
+        if self.current_image is not None and self.current_pixmap is not None:
+            # 重新调整图片大小以适应新的标签大小
+            # 获取标签的当前可用尺寸（考虑布局和边距）
+            label_width = self.width() - 20  # 减去边距
+            label_height = self.height() - 20  # 减去边距
+            
+            # 确保最小显示尺寸
+            display_width = max(label_width, 200)
+            display_height = max(label_height, 200)
+            
+            # 获取原始图片尺寸
+            h, w = self.current_image.shape[:2]
+            
+            # 计算缩放比例，尽量填满显示区域
+            width_ratio = display_width / w
+            height_ratio = display_height / h
+            
+            # 选择较小的缩放比例，确保图片完全显示
+            scale_ratio = min(width_ratio, height_ratio)
+            
+            # 计算最终显示尺寸
+            final_width = int(w * scale_ratio)
+            final_height = int(h * scale_ratio)
+            
+            # 直接缩放当前pixmap，避免重新创建QImage
+            scaled_pixmap = self.current_pixmap.scaled(final_width, final_height, 
+                                                    Qt.AspectRatioMode.KeepAspectRatio, 
+                                                    Qt.TransformationMode.SmoothTransformation)
+            
+            self.setPixmap(scaled_pixmap)
 
 
 class DragDropLabel(ResizableImageLabel):
@@ -47,10 +72,10 @@ class DragDropLabel(ResizableImageLabel):
                 if self.is_image_file(file_path):
                     event.acceptProposedAction()
                     self.setText("释放图片文件")
-                    # 使用CSS属性来设置拖拽状态，而不是直接设置样式表
+                    # 使用CSS属性来设置拖拽状态，避免直接调用unpolish/polish
                     self.setProperty("dragEnter", "true")
-                    self.style().unpolish(self)
-                    self.style().polish(self)
+                    # 使用update()而不是unpolish/polish来触发重绘
+                    self.update()
                 else:
                     event.ignore()
         else:
@@ -61,8 +86,8 @@ class DragDropLabel(ResizableImageLabel):
         self.setText("原始图片")
         # 清除拖拽状态属性
         self.setProperty("dragEnter", "false")
-        self.style().unpolish(self)
-        self.style().polish(self)
+        # 使用update()而不是unpolish/polish来触发重绘
+        self.update()
         super().dragLeaveEvent(event)
     
     def dropEvent(self, event: QDropEvent):
@@ -83,8 +108,8 @@ class DragDropLabel(ResizableImageLabel):
         # 恢复样式，但不设置文字（图片显示会清除文字）
         # 清除拖拽状态属性
         self.setProperty("dragEnter", "false")
-        self.style().unpolish(self)
-        self.style().polish(self)
+        # 使用update()而不是unpolish/polish来触发重绘
+        self.update()
     
     def is_image_file(self, file_path):
         """检查文件是否为支持的图片格式"""
@@ -102,18 +127,17 @@ class ImageProcessor(QMainWindow):
         self.init_ui()
         
     def init_ui(self):
-        self.setWindowTitle("图片处理工具 - V1.0")
+        self.setWindowTitle("图片处理工具 - V1.3")
         self.setGeometry(100, 100, 1200, 1000)
         
         # 设置窗口图标（标题栏logo）
         if os.path.exists("logo.png"):
             self.setWindowIcon(QIcon("logo.png"))
         
-        # 设置时尚简洁的配色方案
+        # 设置简洁的配色方案，避免复杂的渐变效果以减少QPainter错误
         self.setStyleSheet("""
             QMainWindow {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                          stop: 0 #f8fafc, stop: 1 #e2e8f0);
+                background: #f8fafc;
                 color: #1e293b;
                 font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
             }
@@ -131,8 +155,7 @@ class ImageProcessor(QMainWindow):
                 subcontrol-origin: margin;
                 subcontrol-position: top center;
                 padding: 4px 16px;
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                          stop: 0 #6366f1, stop: 1 #4f46e5);
+                background: #6366f1;
                 color: white;
                 border-radius: 20px;
                 font-size: 12px;
@@ -140,8 +163,7 @@ class ImageProcessor(QMainWindow):
                 letter-spacing: 0.5px;
             }
             QPushButton {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                          stop: 0 #6366f1, stop: 1 #4f46e5);
+                background: #6366f1;
                 color: white;
                 border: none;
                 padding: 10px 20px;
@@ -152,12 +174,10 @@ class ImageProcessor(QMainWindow):
                 letter-spacing: 0.3px;
             }
             QPushButton:hover {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                          stop: 0 #818cf8, stop: 1 #6366f1);
+                background: #818cf8;
             }
             QPushButton:pressed {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                          stop: 0 #4f46e5, stop: 1 #4338ca);
+                background: #4f46e5;
             }
             QPushButton:disabled {
                 background: #cbd5e1;
@@ -181,8 +201,7 @@ class ImageProcessor(QMainWindow):
                 background: white;
             }
             QCheckBox::indicator:checked {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                          stop: 0 #6366f1, stop: 1 #4f46e5);
+                background: #6366f1;
                 border: 2px solid #6366f1;
             }
             QCheckBox::indicator:hover {
@@ -198,8 +217,7 @@ class ImageProcessor(QMainWindow):
                 border-radius: 2px;
             }
             QSlider::handle:horizontal {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                          stop: 0 #6366f1, stop: 1 #4f46e5);
+                background: #6366f1;
                 border: 2px solid white;
                 width: 20px;
                 height: 20px;
@@ -207,32 +225,27 @@ class ImageProcessor(QMainWindow):
                 border-radius: 50%;
             }
             QSlider::handle:horizontal:hover {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                          stop: 0 #818cf8, stop: 1 #6366f1);
+                background: #818cf8;
             }
             QSlider::handle:horizontal:pressed {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                          stop: 0 #4f46e5, stop: 1 #4338ca);
+                background: #4f46e5;
             }
             QSlider::sub-page:horizontal {
-                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
-                                          stop: 0 #6366f1, stop: 1 #818cf8);
+                background: #6366f1;
                 border-radius: 2px;
             }
             /* 图片显示区域特殊样式 */
             ResizableImageLabel, DragDropLabel {
                 border: 2px solid #e2e8f0;
                 border-radius: 12px;
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                          stop: 0 #f8fafc, stop: 1 #f1f5f9);
+                background: #f8fafc;
                 color: #94a3b8;
                 font-size: 14px;
                 font-weight: 600;
                 font-style: italic;
             }
             DragDropLabel[dragEnter="true"] {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                          stop: 0 #e0e7ff, stop: 1 #dbeafe);
+                background: #e0e7ff;
                 border: 2px dashed #6366f1;
                 color: #6366f1;
             }
@@ -315,31 +328,31 @@ class ImageProcessor(QMainWindow):
         contrast_group.setLayout(contrast_layout)
         basic_column.addWidget(contrast_group)
         
-        # 黑白强化滑块
-        bw_group = QGroupBox("黑白强化")
-        bw_layout = QVBoxLayout()
-        bw_layout.setSpacing(5)
-        self.bw_slider = QSlider(Qt.Orientation.Horizontal)
-        self.bw_slider.setRange(0, 200)
-        self.bw_slider.setValue(100)
-        self.bw_slider.valueChanged.connect(self.update_processed_image)
-        bw_layout.addWidget(QLabel("黑白强度: 100%"))
-        bw_layout.addWidget(self.bw_slider)
-        bw_group.setLayout(bw_layout)
-        basic_column.addWidget(bw_group)
+        # 亮度调节滑块
+        brightness_group = QGroupBox("亮度调节")
+        brightness_layout = QVBoxLayout()
+        brightness_layout.setSpacing(5)
+        self.brightness_slider = QSlider(Qt.Orientation.Horizontal)
+        self.brightness_slider.setRange(-100, 100)
+        self.brightness_slider.setValue(0)
+        self.brightness_slider.valueChanged.connect(self.update_processed_image)
+        brightness_layout.addWidget(QLabel("亮度: 0"))
+        brightness_layout.addWidget(self.brightness_slider)
+        brightness_group.setLayout(brightness_layout)
+        basic_column.addWidget(brightness_group)
         
-        # 灰度处理滑块
-        gray_group = QGroupBox("灰度处理")
-        gray_layout = QVBoxLayout()
-        gray_layout.setSpacing(5)
-        self.gray_slider = QSlider(Qt.Orientation.Horizontal)
-        self.gray_slider.setRange(0, 100)
-        self.gray_slider.setValue(0)
-        self.gray_slider.valueChanged.connect(self.update_processed_image)
-        gray_layout.addWidget(QLabel("灰度程度: 0%"))
-        gray_layout.addWidget(self.gray_slider)
-        gray_group.setLayout(gray_layout)
-        basic_column.addWidget(gray_group)
+        # 清晰度调节滑块
+        sharpness_group = QGroupBox("清晰度调节")
+        sharpness_layout = QVBoxLayout()
+        sharpness_layout.setSpacing(5)
+        self.sharpness_slider = QSlider(Qt.Orientation.Horizontal)
+        self.sharpness_slider.setRange(0, 100)
+        self.sharpness_slider.setValue(0)
+        self.sharpness_slider.valueChanged.connect(self.update_processed_image)
+        sharpness_layout.addWidget(QLabel("清晰度: 0"))
+        sharpness_layout.addWidget(self.sharpness_slider)
+        sharpness_group.setLayout(sharpness_layout)
+        basic_column.addWidget(sharpness_group)
         
         # 添加弹性空间使控件垂直居中
         basic_column.addStretch()
@@ -379,6 +392,23 @@ class ImageProcessor(QMainWindow):
         rotate_group.setLayout(rotate_layout)
         effect_column.addWidget(rotate_group)
         
+        # 消除摩尔纹开关
+        moire_group = QGroupBox("消除摩尔纹")
+        moire_layout = QVBoxLayout()
+        moire_layout.setSpacing(5)
+        moire_switch_layout = QHBoxLayout()
+        moire_switch_layout.setSpacing(5)
+        moire_switch_layout.addWidget(QLabel("摩尔纹开关:"))
+        self.moire_switch = QCheckBox()
+        self.moire_switch.setChecked(False)
+        self.moire_switch.stateChanged.connect(self.update_processed_image)
+        self.moire_switch.setFixedSize(24, 24)  # 设置固定大小确保显示完整
+        moire_switch_layout.addWidget(self.moire_switch)
+        moire_switch_layout.addStretch()
+        moire_layout.addLayout(moire_switch_layout)
+        moire_group.setLayout(moire_layout)
+        effect_column.addWidget(moire_group)
+
         # 添加弹性空间使控件垂直居中
         effect_column.addStretch()
         
@@ -639,7 +669,8 @@ class ImageProcessor(QMainWindow):
             self.original_image_path = file_path
             
             # 使用numpy从文件读取图片，解决中文路径问题
-            try:
+            #try:
+            if 1:
                 # 方法1: 使用numpy从文件读取
                 with open(file_path, 'rb') as f:
                     img_array = np.frombuffer(f.read(), dtype=np.uint8)
@@ -660,17 +691,32 @@ class ImageProcessor(QMainWindow):
                 if self.original_image is not None:
                     # 显示原始图片
                     self.display_image(self.original_image, self.original_label)
+                    self.original_image_old = self.original_image.copy()
                     # 初始化处理后的图片
+                    #self.processed_image = self.original_image.copy()
+
+                    # 将图片转换为灰度图
+                    self.original_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
+
+                    binary = cv2.adaptiveThreshold(self.original_image,255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY_INV,25,15)
+                    se = cv2.getStructuringElement(cv2.MORPH_RECT,(1,1))
+                    se = cv2.morphologyEx(se, cv2.MORPH_CLOSE, (2,2))
+                    mask = cv2.dilate(binary,se)
+                    mask1 = cv2.bitwise_not(mask)
+                    binary =cv2.bitwise_and(self.original_image,mask)
+                    self.original_image = cv2.add(binary,mask1)
+
                     self.processed_image = self.original_image.copy()
+
                     self.display_image(self.processed_image, self.result_label)
                     self.save_button.setEnabled(True)
                     # 重置参数
-                    self.reset_parameters()
+                    #self.reset_parameters()
                 else:
                     self.show_error_message("无法加载图片，请检查文件路径和格式")
                     
-            except Exception as e:
-                self.show_error_message(f"加载图片时发生错误: {str(e)}")
+            #except Exception as e:
+                #self.show_error_message(f"加载图片时发生错误: {str(e)}")
     
     def select_image(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -690,8 +736,8 @@ class ImageProcessor(QMainWindow):
         
         # 获取滑块值
         contrast_value = self.contrast_slider.value() / 100.0
-        bw_value = self.bw_slider.value() / 100.0
-        gray_value = self.gray_slider.value() / 100.0
+        brightness_value = self.brightness_slider.value()
+        sharpness_value = self.sharpness_slider.value() / 100.0
         blur_value = self.blur_slider.value()
         rotate_value = self.rotate_slider.value()
         
@@ -713,8 +759,8 @@ class ImageProcessor(QMainWindow):
         
         # 更新滑块标签
         self.contrast_slider.parent().findChild(QLabel).setText(f"对比度: {contrast_value*100:.0f}%")
-        self.bw_slider.parent().findChild(QLabel).setText(f"黑白强度: {bw_value*100:.0f}%")
-        self.gray_slider.parent().findChild(QLabel).setText(f"灰度程度: {gray_value*100:.0f}%")
+        self.brightness_slider.parent().findChild(QLabel).setText(f"亮度: {brightness_value}")
+        self.sharpness_slider.parent().findChild(QLabel).setText(f"清晰度: {sharpness_value*100:.0f}%")
         self.blur_slider.parent().findChild(QLabel).setText(f"柔和程度: {blur_value}")
         self.rotate_slider.parent().findChild(QLabel).setText(f"旋转角度: {rotate_value}°")
         
@@ -733,9 +779,35 @@ class ImageProcessor(QMainWindow):
         self.crop_top_label.setText(f"Y: {crop_top*100:.2f}%")
         self.crop_right_label.setText(f"X: {crop_right*100:.2f}%")
         self.crop_bottom_label.setText(f"Y: {crop_bottom*100:.2f}%")
-        
-        # 处理图片
-        self.processed_image = self.original_image.copy()
+
+        # 消除摩尔纹
+        if self.moire_switch.isChecked():
+            self.processed_image = self.remove_moire(self.original_image_old)
+            # 将图像转换为灰度图，因为adaptiveThreshold需要单通道输入
+            if len(self.processed_image.shape) == 3:
+                gray_image = cv2.cvtColor(self.processed_image, cv2.COLOR_BGR2GRAY)
+            else:
+                gray_image = self.processed_image
+            
+            binary = cv2.adaptiveThreshold(gray_image,255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY_INV,25,15)
+            se = cv2.getStructuringElement(cv2.MORPH_RECT,(1,1))
+            se = cv2.morphologyEx(se, cv2.MORPH_CLOSE, (2,2))
+            mask = cv2.dilate(binary,se)
+            mask1 = cv2.bitwise_not(mask)
+            
+            # 确保mask与原始图像的通道数匹配
+            if len(self.original_image_old.shape) == 3 and len(mask.shape) == 2:
+                # 将单通道mask转换为3通道
+                mask_3ch = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+                mask1_3ch = cv2.cvtColor(mask1, cv2.COLOR_GRAY2BGR)
+                binary = cv2.bitwise_and(self.original_image_old, mask_3ch)
+                self.processed_image = cv2.add(binary, mask1_3ch)
+            else:
+                binary = cv2.bitwise_and(self.original_image_old, mask)
+                self.processed_image = cv2.add(binary, mask1)
+        else:
+            # 处理图片
+            self.processed_image = self.original_image.copy()
         
         # 四点变换
         if self.perspective_switch.isChecked() and any([top_left_x, top_left_y, top_right_x, top_right_y, 
@@ -752,14 +824,14 @@ class ImageProcessor(QMainWindow):
         if contrast_value != 1.0:
             self.processed_image = self.adjust_contrast(self.processed_image, contrast_value)
         
-        # 黑白强化
-        if bw_value != 1.0:
-            self.processed_image = self.adjust_black_white(self.processed_image, bw_value)
+        # 亮度调节
+        if brightness_value != 0:
+            self.processed_image = self.adjust_brightness(self.processed_image, brightness_value)
         
-        # 灰度处理
-        if gray_value > 0:
-            self.processed_image = self.adjust_grayscale(self.processed_image, gray_value)
-        
+        # 清晰度调节
+        if sharpness_value > 0:
+            self.processed_image = self.adjust_sharpness(self.processed_image, sharpness_value)
+
         # 画面柔和
         if blur_value > 0:
             self.processed_image = self.apply_blur(self.processed_image, blur_value)
@@ -856,29 +928,87 @@ class ImageProcessor(QMainWindow):
         """调整对比度"""
         return cv2.convertScaleAbs(image, alpha=contrast, beta=0)
     
-    def adjust_black_white(self, image, intensity):
-        """调整黑白强度"""
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        
-        # 应用阈值
-        if intensity > 1.0:
-            # 增强黑白效果
-            _, thresh = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
-            result = cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR)
-            # 与原图混合
-            return cv2.addWeighted(image, 1.0 - (intensity - 1.0), result, intensity - 1.0, 0)
-        else:
-            # 减弱黑白效果 - 需要将灰度图转换为BGR格式
-            gray_bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-            return cv2.addWeighted(image, intensity, gray_bgr, 1.0 - intensity, 0)
+    def adjust_brightness(self, image, brightness):
+        """调整亮度"""
+        # 亮度值范围：-100到100，转换为-255到255
+        brightness_factor = brightness * 2.55
+        return cv2.convertScaleAbs(image, alpha=1.0, beta=brightness_factor)
     
-    def adjust_grayscale(self, image, gray_intensity):
-        """调整灰度程度"""
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        gray_bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    def adjust_sharpness(self, image, sharpness):
+        """调整清晰度"""
+        # 创建锐化核
+        kernel = np.array([[-1, -1, -1],
+                          [-1,  9, -1],
+                          [-1, -1, -1]], dtype=np.float32)
+        
+        # 根据清晰度强度调整核
+        kernel = kernel * sharpness
+        kernel[1, 1] = 8 * sharpness + 1  # 中心值保持原图权重
+        
+        # 应用锐化
+        sharpened = cv2.filter2D(image, -1, kernel)
         
         # 与原图混合
-        return cv2.addWeighted(image, 1.0 - gray_intensity, gray_bgr, gray_intensity, 0)
+        return cv2.addWeighted(image, 1.0 - sharpness, sharpened, sharpness, 0)
+    
+    def remove_moire(self, image):
+        """消除摩尔纹"""
+        if image is None:
+            return image
+        
+        # 检查图像通道数
+        if len(image.shape) == 2:
+            # 灰度图像 - 直接处理单通道
+            # 多尺度高斯滤波
+            def multi_scale_filter(image):
+                # 不同尺度的高斯滤波
+                g1 = cv2.GaussianBlur(image, (3, 3), 0.5)
+                g2 = cv2.GaussianBlur(image, (5, 5), 1.0)
+                g3 = cv2.GaussianBlur(image, (7, 7), 1.5)
+                
+                # 融合不同尺度的结果
+                blended = cv2.addWeighted(g1, 0.4, g2, 0.4, 0)
+                blended = cv2.addWeighted(blended, 0.6, g3, 0.4, 0)
+                
+                return blended
+            
+            # 对灰度图像进行多尺度滤波
+            filtered = multi_scale_filter(image)
+            
+            # 双边滤波保留边缘
+            bilateral = cv2.bilateralFilter(filtered, 9, 75, 75)
+            
+            return bilateral
+        else:
+            # 彩色图像 - 转换为Lab颜色空间处理
+            # 转换为Lab颜色空间，更好地保留颜色信息
+            lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+            l, a, b = cv2.split(lab)
+            
+            # 多尺度高斯滤波
+            def multi_scale_filter(image):
+                # 不同尺度的高斯滤波
+                g1 = cv2.GaussianBlur(image, (3, 3), 0.5)
+                g2 = cv2.GaussianBlur(image, (5, 5), 1.0)
+                g3 = cv2.GaussianBlur(image, (7, 7), 1.5)
+                
+                # 融合不同尺度的结果
+                blended = cv2.addWeighted(g1, 0.4, g2, 0.4, 0)
+                blended = cv2.addWeighted(blended, 0.6, g3, 0.4, 0)
+                
+                return blended
+            
+            # 对亮度通道进行多尺度滤波
+            l_filtered = multi_scale_filter(l)
+            
+            # 合并通道
+            lab_filtered = cv2.merge([l_filtered, a, b])
+            result_bgr = cv2.cvtColor(lab_filtered, cv2.COLOR_LAB2BGR)
+            
+            # 双边滤波保留边缘
+            bilateral = cv2.bilateralFilter(result_bgr, 9, 75, 75)
+            
+            return bilateral
     
     def apply_blur(self, image, blur_strength):
         """应用高斯模糊"""
@@ -918,8 +1048,14 @@ class ImageProcessor(QMainWindow):
             h, w, ch = rgb_image.shape
             bytes_per_line = ch * w
             
-            # 创建QImage
-            q_img = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
+            # 创建QImage - 使用copy()确保数据安全
+            # 避免使用原始数据指针，防止数据被修改导致QPainter错误
+            rgb_image_copy = rgb_image.copy()
+            
+            # 使用QImage.fromData()方法创建QImage，避免直接使用数据指针
+            # 将numpy数组转换为bytes，然后创建QImage
+            rgb_image_bytes = rgb_image_copy.tobytes()
+            q_img = QImage(rgb_image_bytes, w, h, bytes_per_line, QImage.Format.Format_RGB888)
             
             # 缩放图片以适应标签 - 使用标签的实际可用尺寸
             pixmap = QPixmap.fromImage(q_img)
@@ -958,8 +1094,8 @@ class ImageProcessor(QMainWindow):
     def reset_parameters(self):
         """重置所有参数滑块"""
         self.contrast_slider.setValue(100)
-        self.bw_slider.setValue(100)
-        self.gray_slider.setValue(0)
+        self.brightness_slider.setValue(0)
+        self.sharpness_slider.setValue(0)
         self.blur_slider.setValue(0)
         self.rotate_slider.setValue(0)
         
@@ -984,6 +1120,9 @@ class ImageProcessor(QMainWindow):
         
         # 重置裁剪开关
         self.crop_switch.setChecked(False)
+        
+        # 重置摩尔纹开关
+        self.moire_switch.setChecked(False)
         
         if self.original_image is not None:
             self.processed_image = self.original_image.copy()
